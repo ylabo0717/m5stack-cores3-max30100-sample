@@ -2,22 +2,10 @@
 #include <Wire.h>
 #include "MAX30100_PulseOximeter.h"
 
-#define kIntervalTimeMilliSec     1000
-
+const uint32_t kIntervalTimeMilliSec = 1000;
 PulseOximeter pox;
-uint8_t Heart_rate = 0;
-uint8_t Spo2 = 0;
-uint32_t tsLastReport = 0;
-
-// Callback (registered below) fired when a pulse is detected
-void onBeatDetected() {
-  printHRandSPO2(true);
-}
 
 void setup() {
-  Serial.begin(115200); // to PC via USB
-
-
   M5.begin();
 
   // I2C(PortA) Power On
@@ -25,38 +13,36 @@ void setup() {
   Wire.begin(2, 1);
 
   M5.Lcd.clear(BLACK);
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setTextColor(WHITE);
   M5.Lcd.setTextSize(4);
 
   // Initialize sensor
   if (!pox.begin()) {
     M5.Lcd.println("FAILED");
     for(;;);
-   } else {
-    M5.Lcd.println("SUCCESS");
   }
 
   //LED Configuration
   pox.setIRLedCurrent(MAX30100_LED_CURR_7_6MA);
-  //Register a callback for the beat detection
-  pox.setOnBeatDetectedCallback(onBeatDetected);
 }
 
 void loop() {
-  pox.update(); //update pulse oximeter
+  static uint32_t tsLastReport = 0;
 
+  pox.update(); //update pulse oximeter
   if (millis() - tsLastReport > kIntervalTimeMilliSec) {
-    Heart_rate = (int)pox.getHeartRate();
-    Spo2 = pox.getSpO2();
-    printHRandSPO2(false);
+    auto heart_rate = (int)pox.getHeartRate();
+    auto spo2 = pox.getSpO2();
+    Display(heart_rate, spo2);
     tsLastReport = millis();
   }
 }
 
-void printHRandSPO2(bool beat) {
+void Display(int heart_rate, int spo2) {
   M5.Lcd.fillScreen(BLACK);
-  M5.Lcd.setTextColor(WHITE);
-  M5.Lcd.setTextSize(4);
   M5.Lcd.setCursor(0,70);
-  M5.Lcd.print("HR:   "); M5.Lcd.println(Heart_rate);
-  M5.Lcd.print("SPO2: "); M5.Lcd.println(Spo2);  
+  M5.Lcd.printf("HR:   %3d", heart_rate);
+  M5.Lcd.setCursor(0,110);
+  M5.Lcd.printf("SPO2: %3d", spo2);
 }
