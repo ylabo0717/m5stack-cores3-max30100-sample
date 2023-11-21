@@ -1,47 +1,62 @@
 #include <M5CoreS3.h>
+#include <Wire.h>
+#include "MAX30100_PulseOximeter.h"
 
-#include "MAX30100.h"
+#define kIntervalTimeMilliSec     1000
 
-#define SAMPLING_RATE MAX30100_SAMPRATE_100HZ
-#define IR_LED_CURRENT MAX30100_LED_CURR_24MA
-#define RED_LED_CURRENT MAX30100_LED_CURR_27_1MA
-#define PULSE_WIDTH MAX30100_SPC_PW_1600US_16BITS
-#define HIGHRES_MODE true
+PulseOximeter pox;
+uint8_t Heart_rate = 0;
+uint8_t Spo2 = 0;
+uint32_t tsLastReport = 0;
 
-MAX30100 sensor;
+// Callback (registered below) fired when a pulse is detected
+void onBeatDetected() {
+  printHRandSPO2(true);
+}
 
 void setup() {
+  Serial.begin(115200); // to PC via USB
+
+
   M5.begin();
 
-  // Initialize I2C
+  // I2C(PortA) Power On
   M5.Axp.setBoostBusOutEn(true);
   Wire.begin(2, 1);
 
-  Serial.print("Initializing MAX30100..");
+  M5.Lcd.clear(BLACK);
+  M5.Lcd.setTextSize(4);
 
-  while (!sensor.begin()) {  // Initialize the sensor.
-    M5.Lcd.setTextFont(4);
-    M5.Lcd.setCursor(50, 100, 4);
-    M5.Lcd.println("Sensor not found");
-    delay(1000);
+  // Initialize sensor
+  if (!pox.begin()) {
+    M5.Lcd.println("FAILED");
+    for(;;);
+   } else {
+    M5.Lcd.println("SUCCESS");
   }
-  M5.Lcd.fillScreen(BLACK);
-  // Set up the wanted parameters.
-  sensor.setMode(MAX30100_MODE_SPO2_HR);
-  sensor.setLedsCurrent(IR_LED_CURRENT, RED_LED_CURRENT);
-  sensor.setLedsPulseWidth(PULSE_WIDTH);
-  sensor.setSamplingRate(SAMPLING_RATE);
-  sensor.setHighresModeEnabled(HIGHRES_MODE);
+
+  //LED Configuration
+  pox.setIRLedCurrent(MAX30100_LED_CURR_7_6MA);
+  //Register a callback for the beat detection
+  pox.setOnBeatDetectedCallback(onBeatDetected);
 }
 
 void loop() {
-  uint16_t ir, red;
-  sensor.update();
-  while (sensor.getRawValues(&ir, &red)) {
-    M5.Lcd.setTextFont(4);
-    M5.Lcd.setCursor(100, 100, 4);
-    M5.Lcd.printf("IR:%d               ", ir);
-    M5.Lcd.setCursor(100, 130, 4);
-    M5.Lcd.printf("RED:%d              ", red);
+  pox.update(); //update pulse oximeter
+
+  if (millis() - tsLastReport > kIntervalTimeMilliSec) {
+    Heart_rate = (int)pox.getHeartRate();
+    Spo2 = pox.getSpO2();
+    printHRandSPO2(false);
+    tsLastReport = millis();
   }
+}
+
+void printHRandSPO2(bool beat) {
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setTextColor(WHITE);
+  M5.Lcd.setTextSize(4);
+  M5.Lcd.setCursor(0,70);
+  M5.Lcd.print("HR:   "); M5.Lcd.println(Heart_rate);
+  M5.Lcd.print("SPO2: "); M5.Lcd.println(Spo2);  
 }
